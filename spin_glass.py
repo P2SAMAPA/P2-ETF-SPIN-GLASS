@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import config   # <-- added
 
 class SpinGlass:
     def __init__(self, returns_df, window=60):
@@ -28,7 +29,6 @@ class SpinGlass:
 
     def compute_energy(self, spins, J):
         """Hamiltonian H = -sum_{i<j} J_ij s_i s_j"""
-        # Sum over all pairs (i<j)
         H = 0.0
         for i in range(self.n_assets):
             for j in range(i+1, self.n_assets):
@@ -37,7 +37,6 @@ class SpinGlass:
 
     def run(self):
         """Compute spins, J, local fields, magnetisation, energy."""
-        # Use the last day's returns to determine current spin configuration
         last_returns = self.returns.iloc[-1].values
         spins = self.compute_spins(last_returns)
         J = self.compute_correlation_matrix()
@@ -45,9 +44,8 @@ class SpinGlass:
         magnetisation = self.compute_magnetisation(spins)
         energy = self.compute_energy(spins, J)
 
-        # For diagnostics, compute effective temperature = cross-sectional vol of recent returns
         recent_returns = self.returns.iloc[-self.window:]
-        cross_vol = recent_returns.std(axis=0).mean()   # average std across assets
+        cross_vol = recent_returns.std(axis=0).mean()
         effective_temperature = cross_vol * config.TEMPERATURE_SCALE
 
         return {
