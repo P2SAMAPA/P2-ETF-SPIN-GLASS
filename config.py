@@ -17,10 +17,10 @@ UNIVERSES = {
     ]
 }
 
-# Rolling window for correlation (days)
-ROLLING_WINDOW = 60
+# Multiple rolling windows for correlation
+WINDOWS = [60, 126, 252]
 
-# Effective temperature: cross-sectional volatility (multiplier)
-TEMPERATURE_SCALE = 1.0   # not used directly in ranking but for diagnostics
+# Effective temperature scaling (not used in ranking)
+TEMPERATURE_SCALE = 1.0
 
 TOP_N = 3
