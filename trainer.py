@@ -17,39 +17,61 @@ def main():
     today = datetime.now().strftime("%Y-%m-%d")
 
     for universe_name, tickers in config.UNIVERSES.items():
-        print(f"\n=== Universe: {universe_name} (Spin Glass) ===")
+        print(f"\n=== Universe: {universe_name} (Spin Glass multi‑window) ===")
         returns = data_manager.prepare_returns_matrix(df, tickers)
-        if returns.empty or len(returns) < config.ROLLING_WINDOW + 2:
+        if returns.empty or len(returns) < max(config.WINDOWS) + 2:
             print("  Insufficient data")
             all_results[universe_name] = {"top_etfs": []}
             continue
 
-        sg = SpinGlass(returns, window=config.ROLLING_WINDOW)
-        result = sg.run()
-        # Get local fields and corresponding assets
-        local_fields = result["local_fields"]
-        assets = result["assets"]
-        # Sort by local field descending (high = aligned with metastable state)
-        sorted_idx = np.argsort(local_fields)[::-1]
+        # Store best local field per ETF across windows
+        best_field = {ticker: -np.inf for ticker in tickers}
+        best_window = {ticker: None for ticker in tickers}
+
+        for win in config.WINDOWS:
+            print(f"  Rolling window: {win} days")
+            if len(returns) < win + 1:
+                continue
+            sg = SpinGlass(returns, window=win)
+            result = sg.run()
+            local_fields = result["local_fields"]
+            assets = result["assets"]
+            for i, ticker in enumerate(assets):
+                field = local_fields[i]
+                if field > best_field[ticker]:
+                    best_field[ticker] = field
+                    best_window[ticker] = win
+
+        # Build list of ETFs with their best field and window
+        etf_scores = [{"ticker": t, "local_field": best_field[t], "window": best_window[t]} for t in tickers if best_window[t] is not None]
+        if not etf_scores:
+            print("  No valid windows")
+            all_results[universe_name] = {"top_etfs": []}
+            continue
+
+        # Sort by local field descending
+        etf_scores.sort(key=lambda x: x["local_field"], reverse=True)
         top_etfs = []
         full_scores = {}
-        for i, idx in enumerate(sorted_idx):
-            ticker = assets[idx]
-            field = local_fields[idx]
-            full_scores[ticker] = field
-            if i < config.TOP_N:
-                top_etfs.append({
-                    "ticker": ticker,
-                    "local_field": float(field)
-                })
-        print(f"  Top 3 ETFs by local field: {[e['ticker'] for e in top_etfs]}")
-        print(f"  Magnetisation (consensus): {result['magnetisation']:.3f}")
+        for item in etf_scores:
+            full_scores[item["ticker"]] = {
+                "local_field": item["local_field"],
+                "window": item["window"]
+            }
+        for item in etf_scores[:config.TOP_N]:
+            top_etfs.append({
+                "ticker": item["ticker"],
+                "local_field": float(item["local_field"]),
+                "window": item["window"]
+            })
+
+        print(f"  Top 3 ETFs by best local field across windows:")
+        for etf in top_etfs:
+            print(f"    {etf['ticker']}: field={etf['local_field']:.4f} (window={etf['window']}d)")
+
         all_results[universe_name] = {
             "top_etfs": top_etfs,
             "full_scores": full_scores,
-            "magnetisation": result["magnetisation"],
-            "energy": result["energy"],
-            "effective_temperature": result["effective_temperature"],
             "run_date": today
         }
 
@@ -61,7 +83,7 @@ def main():
 
     import push_results
     push_results.push_daily_result(local_path)
-    print("\n=== Spin Glass / Ising Market Model complete ===")
+    print("\n=== Spin Glass / Ising Market Model (multi‑window) complete ===")
 
 if __name__ == "__main__":
     main()
