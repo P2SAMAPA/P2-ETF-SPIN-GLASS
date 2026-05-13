@@ -18,14 +18,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="main-header">🔮 Spin Glass / Ising Market Model</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Statistical physics of financial spins | Local field ranking | Magnetisation = market consensus</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Multi‑window (60/126/252d) | Local field ranking | Best window per ETF</div>', unsafe_allow_html=True)
 
 st.sidebar.markdown("## 🔮 Spin Glass")
 st.sidebar.markdown(f"**Run Date:** `{st.session_state.get('run_date', 'Not loaded')}`")
 st.sidebar.markdown(f"**Next Trading Day:** `{next_trading_day()}`")
 st.sidebar.markdown("**Method:** Sherrington‑Kirkpatrick spin glass")
-st.sidebar.markdown("**Interaction:** Correlation matrix (rolling 60d)")
-st.sidebar.markdown("**Spin:** sign of daily return")
+st.sidebar.markdown("**Windows:** 60, 126, 252 days (best local field per ETF)")
 
 OUTPUT_REPO = config.OUTPUT_REPO
 HF_TOKEN = config.HF_TOKEN
@@ -69,7 +68,7 @@ if "error" in data:
 st.session_state['run_date'] = data['run_date']
 universes = data["universes"]
 
-st.header("🏆 Top ETFs by Local Field (Aligned with Metastable State)")
+st.header("🏆 Top ETFs by Best Local Field (Multi‑Window)")
 
 for universe_name, uni_data in universes.items():
     top_etfs = uni_data.get("top_etfs", [])
@@ -83,23 +82,22 @@ for universe_name, uni_data in universes.items():
             <div class="etf-card">
                 <div class="etf-ticker">{etf['ticker']}</div>
                 <div class="etf-score">local field = {etf['local_field']:.4f}</div>
+                <div class="etf-score">window = {etf['window']}d</div>
             </div>
             """, unsafe_allow_html=True)
-    # Show global metrics
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Magnetisation (m)", f"{uni_data['magnetisation']:.3f}", help=">0 = bullish consensus")
-    with col2:
-        st.metric("Energy (H)", f"{uni_data['energy']:.3f}")
-    with col3:
-        st.metric("Effective Temperature", f"{uni_data['effective_temperature']:.4f}")
-    # Full table with all ETFs and local fields
+    # Full table with all ETFs and their best window
     with st.expander("📋 Full ranking (all ETFs)"):
         full_scores = uni_data.get("full_scores", {})
         if full_scores:
-            df = pd.DataFrame(list(full_scores.items()), columns=["ETF", "Local Field"])
-            df = df.sort_values("Local Field", ascending=False)
+            rows = []
+            for ticker, info in full_scores.items():
+                rows.append({
+                    "ETF": ticker,
+                    "Local Field": info["local_field"],
+                    "Best Window (days)": info["window"]
+                })
+            df = pd.DataFrame(rows).sort_values("Local Field", ascending=False)
             st.dataframe(df, use_container_width=True, hide_index=True)
     st.divider()
 
-st.caption("Positive local field → ETF aligns with current market metastable state → overweight signal. Negative local field → against the state → underweight. Magnetisation m = (1/N) Σ s_i, with s_i = sign(return).")
+st.caption("For each ETF, we compute local field h_i = Σ_j J_ij s_j using three rolling windows (60, 126, 252 days) and keep the highest value. Positive local field → ETF aligns with current market metastable state → overweight signal.")
